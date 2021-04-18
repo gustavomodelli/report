@@ -1,0 +1,76 @@
+library(tidyverse)
+library(mediation)
+library(lme4)
+library(lmerTest)
+library(nlme)
+library(finalfit)
+library(mice)
+library(report)
+
+data("Milk")
+
+Milk %>% str()
+
+ggplot(Milk, aes(as.factor(Time), protein, color = Diet))+
+  geom_boxplot()+
+  facet_wrap(~ Diet)
+
+model1 <- lmer(protein ~ Diet + (1 | Time) + (1 | Cow), data = Milk)
+summary(model1)
+
+Milk %>% 
+  finalfit(dependent = 'protein', explanatory = 'Diet', random_effect = '(1 | Time) + (1 | Cow)', metrics = TRUE)
+
+model1 %>% report()
+
+## using glm logitic
+data <- data.frame(
+  age = c(rnorm(150, 40, 5), rnorm(150, 50, 5)),
+  sex = c(rbinom(300, 1, 0.5)),
+  death = rbinom(300, 1, 0.2)
+) %>% 
+  mutate(
+  sex = factor(sex, labels = c('female', 'male')),
+  death = factor(death, labels = c('no','yes'))
+  )
+
+model <- glm(death ~ . , data = data, family = 'binomial')
+summary(model)
+
+model %>% report()
+
+## Session
+session <- sessionInfo()
+report(session)
+
+## Mediation
+# X + M ~ Y 
+
+data("milk")
+milk %>% str()
+
+# X: percentenge protein
+# M: mass
+# Y: neocortex.perc
+
+# Simple model multiple imputation
+
+imp <- mice(milk,m = 10)
+summary(imp)
+
+imp %>% 
+  with(lm(neocortex.perc ~ perc.protein + mass)) %>% 
+  pool() %>% 
+  fit2df()
+
+new <- complete(imp)
+
+model.f <- lm(neocortex.perc ~ perc.protein + mass, data = new)
+summary(model.f)
+
+model.m <- lm(mass ~ perc.protein, data = new)
+summary(model.m)
+
+med <- mediate(model.m, model.f, treat = 'perc.protein', mediator = 'mass')
+summary(med)
+plot(med)
